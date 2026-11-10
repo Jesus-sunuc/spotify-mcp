@@ -1,6 +1,6 @@
 """HTTP API for the web front-end. Reuses the Spotify client and tools from server.py.
 
-Run:  .venv/bin/uvicorn api:app --host 127.0.0.1 --port 8000 --reload
+Run:  .venv/bin/uvicorn api:app --host localhost --port 8000 --reload
 """
 
 from fastapi import FastAPI, Request

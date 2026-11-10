@@ -39,15 +39,15 @@ cd .devcontainer && docker compose up        # add -d to run in the background
 | Web remote | http://localhost:5175 |
 | API | http://localhost:8001 (docs at `/docs`) |
 
-Both are bound to `127.0.0.1` only. Ports differ from dona-pilar (5173/8000) so both stacks can run at once. Stop with `docker compose down`.
+Both are reachable from this machine only (localhost). Ports differ from dona-pilar (5173/8000) so both stacks can run at once. Stop with `docker compose down`.
 
 ### Without Docker
 
 Two terminals:
 
 ```sh
-cd backend  && .venv/bin/uvicorn api:app --host 127.0.0.1 --port 8000 --reload
-cd frontend && npm run dev      # http://localhost:5173 (proxies /api to :8000)
+cd backend  && .venv/bin/uvicorn api:app --host localhost --port 8000 --reload
+cd frontend && npm run dev      # http://localhost:5173 (proxies /api to localhost:8000)
 ```
 
 Features: now-playing bar with play/pause, your top artists (one click to play), search songs / artists / playlists with play and add-to-queue.
