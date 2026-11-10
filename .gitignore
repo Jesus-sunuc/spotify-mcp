@@ -221,3 +221,9 @@ __marimo__/
 
 # Spotify OAuth token (personal login, never commit)
 .spotify_token_cache
+
+# Web remote database (alarms, settings)
+backend/data/
+
+# The Python template above ignores lib/ (for virtualenvs); the frontend helpers folder must be tracked
+!frontend/src/lib/

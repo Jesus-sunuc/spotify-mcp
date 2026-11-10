@@ -17,7 +17,7 @@ services:
       - developer_home:/home/developer
     working_dir: /app/backend
     environment:
-      - TZ=America/Guatemala
+      - TZ=${TZ:-America/Denver}  # alarms fire in this timezone; set TZ in your shell to override
       # Linux venv lives in the home volume; backend/.venv is the macOS one and isn't used here.
       - VIRTUAL_ENV=/home/developer/.venv
       - PATH=/home/developer/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

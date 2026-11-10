@@ -20,6 +20,30 @@ export type NowPlaying = {
   device: string | null
 }
 
+export type Device = {
+  name: string
+  type: string
+  is_active: boolean
+  volume_percent: number | null
+  selected: boolean
+}
+
+export type SleepStatus = { active: boolean; ends_at: string | null; fade_minutes: number }
+
+export type Alarm = {
+  id: number
+  time: string // 'HH:MM' 24h
+  days: number[] // 0=Mon..6=Sun; [] = once
+  uri: string
+  label: string
+  target_volume: number
+  ramp_minutes: number
+  enabled: boolean
+  last_fired: string | null
+}
+
+export type NewAlarm = Omit<Alarm, 'id' | 'enabled' | 'last_fired'>
+
 export type SearchResults = { track: Track; artist: Artist; playlist: Playlist }
 export type SearchType = keyof SearchResults
 
@@ -27,8 +51,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, { headers: { 'Content-Type': 'application/json' }, ...init })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    // Backend errors are {"error": "..."}; FastAPI validation errors are {"detail": ...}
-    const message = data.error ?? (typeof data.detail === 'string' ? data.detail : null)
+    // Backend errors are {"error": "..."}; FastAPI errors are {"detail": "..."} or a list of validation errors
+    const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail
+    const message = data.error ?? (typeof detail === 'string' ? detail : null)
     throw new Error(message ?? `Request failed (${res.status})`)
   }
   return data as T
@@ -46,4 +71,18 @@ export const api = {
   play: (body: { uris?: string[]; context_uri?: string } = {}) => post('/play', body),
   pause: () => post('/pause'),
   queue: (uris: string[]) => post('/queue', { uris }),
+
+  devices: () => request<Device[]>('/devices'),
+  selectDevice: (name: string) => request('/devices/selected', { method: 'PUT', body: JSON.stringify({ name }) }),
+
+  sleep: () => request<SleepStatus>('/sleep'),
+  startSleep: (minutes: number) => post<SleepStatus>('/sleep', { minutes }),
+  cancelSleep: () => request<SleepStatus>('/sleep', { method: 'DELETE' }),
+
+  alarms: () => request<Alarm[]>('/alarms'),
+  createAlarm: (alarm: NewAlarm) => post<Alarm>('/alarms', alarm),
+  setAlarmEnabled: (id: number, enabled: boolean) =>
+    request<Alarm>(`/alarms/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+  deleteAlarm: (id: number) => request(`/alarms/${id}`, { method: 'DELETE' }),
+  testAlarm: (id: number) => post(`/alarms/${id}/test`),
 }
