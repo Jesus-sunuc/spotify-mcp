@@ -99,8 +99,8 @@ def search_tracks(query: str, limit: int = 5) -> list[dict]:
 @mcp.tool()
 def create_playlist(name: str, description: str = "", public: bool = False) -> dict:
     """Create an empty playlist in the user's library. Returns its id and URL."""
-    user_id = sp().current_user()["id"]
-    p = sp().user_playlist_create(user_id, name, public=public, description=description)
+    # POST /me/playlists: Spotify removed /users/{id}/playlists for Development Mode apps (Feb 2026).
+    p = sp().current_user_playlist_create(name, public=public, description=description)
     return {"id": p["id"], "url": p["external_urls"]["spotify"]}
 
 
