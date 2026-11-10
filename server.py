@@ -97,6 +97,30 @@ def search_tracks(query: str, limit: int = 5) -> list[dict]:
 
 
 @mcp.tool()
+def search_playlists(query: str, limit: int = 10) -> list[dict]:
+    """Search existing public playlists (e.g. 'rock nacional argentino'). Play one with play(playlist_id=...).
+    Note: Spotify-owned editorial playlists are often not returned to developer apps."""
+    res = sp().search(q=query, type="playlist", limit=min(limit, 10))
+    out = []
+    for p in res["playlists"]["items"]:
+        if not p:  # Spotify returns null entries for playlists the app can't see
+            continue
+        # Feb 2026 API renamed the playlist "tracks" field to "items"
+        total = (p.get("items") or p.get("tracks") or {}).get("total")
+        out.append(
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "owner": p["owner"].get("display_name") or p["owner"]["id"],
+                "tracks": total,
+                "description": p.get("description", ""),
+                "url": p["external_urls"]["spotify"],
+            }
+        )
+    return out
+
+
+@mcp.tool()
 def create_playlist(name: str, description: str = "", public: bool = False) -> dict:
     """Create an empty playlist in the user's library. Returns its id and URL."""
     # POST /me/playlists: Spotify removed /users/{id}/playlists for Development Mode apps (Feb 2026).
