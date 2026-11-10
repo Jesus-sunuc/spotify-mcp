@@ -21,6 +21,9 @@ services:
       # Linux venv lives in the home volume; backend/.venv is the macOS one and isn't used here.
       - VIRTUAL_ENV=/home/developer/.venv
       - PATH=/home/developer/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      # Address guests' phones use to reach this Mac (for the party QR code). Set in .devcontainer/.env;
+      # can also be changed from the Party section of the web remote.
+      - PARTY_HOST=${PARTY_HOST:-}
     command: >
       sh -c "
         uv venv --allow-existing --quiet /home/developer/.venv
@@ -42,6 +45,7 @@ services:
     working_dir: /app/frontend
     environment:
       - API_URL=http://spotify-mcp-api:8000
+      - GUEST_API_URL=http://spotify-mcp-guest:8000  # lets you preview the guest page at localhost:5175/guest.html
     command: >
       sh -c "
         npm ci --no-audit --no-fund   # ci never rewrites package-lock.json
@@ -52,6 +56,38 @@ services:
     depends_on:
       - spotify-mcp-api
 
+  # Party jukebox page + API for guests' phones. The ONLY service reachable from your Wi-Fi.
+  # It can only show the party, search, add songs and vote, and only with the current party code.
+  spotify-mcp-guest:
+    container_name: spotify_mcp_guest
+    build:
+      context: .
+    user: developer
+    volumes:
+      - ../:/app/
+      - developer_home:/home/developer
+      - guest_node_modules:/app/frontend/node_modules
+    working_dir: /app/backend
+    environment:
+      - TZ=${TZ:-America/Denver}
+      # Own venv so it doesn't race the api service installing into the same one at startup
+      - VIRTUAL_ENV=/home/developer/.venv-guest
+      - PATH=/home/developer/.venv-guest/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    # Serves a production build of the guest page (no Vite dev server on the network).
+    command: >
+      sh -c "
+        cd /app/frontend && npm ci --no-audit --no-fund && npm run build
+        cd /app/backend
+        uv venv --allow-existing --quiet /home/developer/.venv-guest
+        uv pip install --quiet -r requirements.txt
+        uvicorn guest_api:app --host 0.0.0.0 --port 8000
+      "
+    ports:
+      - 5176:8000  # open to your local network on purpose: guests' phones connect here
+    depends_on:
+      - spotify-mcp-api
+
 volumes:
   developer_home:
   web_node_modules:
+  guest_node_modules:

@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta
 
 import db
+import party
 import player
 import server
 
@@ -150,6 +151,42 @@ class ABLoop:
 
 
 ab_loop = ABLoop()
+
+
+# ---------- party jukebox ----------
+
+QUEUE_AHEAD_MS = 25_000  # queue the top-voted song this long before the current one ends
+
+
+async def party_loop() -> None:
+    """While a party is on, add the most-voted guest song to Spotify's queue near the end of each track."""
+    queued_during: str | None = None  # track URI we already queued after (one pick per track)
+    while True:
+        delay = 10.0
+        try:
+            code = await asyncio.to_thread(party.active_code)
+            cur = await asyncio.to_thread(server.sp().current_playback) if code else None
+            if code and cur and cur.get("is_playing") and cur.get("item"):
+                uri = cur["item"]["uri"]
+                remaining = cur["item"]["duration_ms"] - cur["progress_ms"]
+                if remaining <= QUEUE_AHEAD_MS and queued_during != uri:
+                    queued_during = uri
+                    song = await asyncio.to_thread(party.pop_top, code)
+                    if song:
+                        try:
+                            await asyncio.to_thread(server.sp().add_to_queue, song["uri"], device_id=cur["device"]["id"])
+                            log.info("party: queued %s (%s votes)", song["name"], song["votes"])
+                        except Exception:
+                            await asyncio.to_thread(party.set_status, song["id"], "pending")  # put it back
+                            raise
+                    delay = max(2, remaining / 1000 + 2)  # wait for the next track to start
+                else:
+                    delay = min(10, max(2, (remaining - QUEUE_AHEAD_MS) / 1000))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("party loop failed")
+        await asyncio.sleep(delay)
 
 
 # ---------- wake-up alarms ----------

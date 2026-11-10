@@ -66,6 +66,24 @@ export type Release = {
 
 export type Releases = { items: Release[]; updated_at: number; days_back: number }
 
+export type PartySongHost = {
+  id: number
+  uri: string
+  name: string
+  artists: string
+  image: string | null
+  added_by: string
+  votes: number
+}
+
+export type PartyHostState = {
+  active: boolean
+  url: string | null // what the QR code encodes
+  host: string // address guests' phones use to reach this Mac
+  port: string
+  songs: PartySongHost[]
+}
+
 export type SearchResults = { track: Track; artist: Artist; playlist: Playlist }
 export type SearchType = keyof SearchResults
 
@@ -113,4 +131,12 @@ export const api = {
   stopLoop: () => request<LoopStatus>('/loop', { method: 'DELETE' }),
 
   releases: (refresh = false) => request<Releases>(`/releases${refresh ? '?refresh=true' : ''}`),
+
+  party: () => request<PartyHostState>('/party'),
+  startParty: () => post<PartyHostState>('/party'),
+  endParty: () => request<PartyHostState>('/party', { method: 'DELETE' }),
+  setPartyHost: (host: string) => request<PartyHostState>('/party/host', { method: 'PUT', body: JSON.stringify({ host }) }),
+  removePartySong: (id: number) => request(`/party/songs/${id}`, { method: 'DELETE' }),
+  /** Changes whenever the link changes, so the <img> reloads. */
+  partyQrUrl: (url: string) => `/api/party/qr.svg?v=${encodeURIComponent(url)}`,
 }

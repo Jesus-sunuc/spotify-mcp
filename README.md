@@ -38,8 +38,18 @@ cd .devcontainer && docker compose up        # add -d to run in the background
 |---|---|
 | Web remote | http://localhost:5175 |
 | API | http://localhost:8001 (docs at `/docs`) |
+| Party page for guests | http://&lt;your-mac&gt;.local:5176 (via the QR code) |
 
-Both are reachable from this machine only (localhost). Ports differ from dona-pilar (5173/8000) so both stacks can run at once. Stop with `docker compose down`.
+The remote and API are reachable from this machine only (localhost). Ports differ from dona-pilar (5173/8000) so both stacks can run at once. Stop with `docker compose down`.
+
+#### Party jukebox
+
+Start a party from the remote, then guests on the same Wi-Fi scan the QR code, add songs and vote. About 25 seconds before each song ends, the most-voted song is added to Spotify's queue.
+
+- **Port 5176 is open to your local network on purpose.** That service (`backend/guest_api.py`) can only show the party, search, add songs and vote, and only with the current party code. Ending the party invalidates the link.
+- The QR code uses `PARTY_HOST` from `.devcontainer/.env` (git-ignored), e.g. `PARTY_HOST=yourmac.local` (`scutil --get LocalHostName`). You can also change it in the Party section.
+- Limits per guest: 3 songs waiting at a time, 10 searches/min (60/min for everyone combined, to protect the Spotify quota).
+- macOS may ask whether Docker can accept incoming connections the first time a phone connects. Allow it.
 
 ### Without Docker
 

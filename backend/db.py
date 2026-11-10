@@ -24,6 +24,28 @@ CREATE TABLE IF NOT EXISTS alarms (
   enabled        INTEGER NOT NULL DEFAULT 1,
   last_fired     TEXT                         -- 'YYYY-MM-DD'; stops it firing twice in one day
 );
+
+-- Party jukebox: songs guests suggest, and their votes
+CREATE TABLE IF NOT EXISTS party_songs (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  party_code   TEXT    NOT NULL,
+  uri          TEXT    NOT NULL,
+  name         TEXT    NOT NULL,
+  artists      TEXT    NOT NULL,
+  image        TEXT,
+  duration_ms  INTEGER,
+  added_by     TEXT    NOT NULL,              -- guest's nickname
+  guest_id     TEXT    NOT NULL,              -- random id the guest's browser keeps
+  added_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+  status       TEXT    NOT NULL DEFAULT 'pending'  -- pending | queued | removed
+);
+CREATE INDEX IF NOT EXISTS party_songs_pending ON party_songs (party_code, status);
+
+CREATE TABLE IF NOT EXISTS party_votes (
+  song_id   INTEGER NOT NULL REFERENCES party_songs(id) ON DELETE CASCADE,
+  guest_id  TEXT    NOT NULL,
+  PRIMARY KEY (song_id, guest_id)
+);
 """
 
 
@@ -59,6 +81,11 @@ def set_setting(key: str, value: str) -> None:
             "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
+
+
+def delete_setting(key: str) -> None:
+    with connect() as con:
+        con.execute("DELETE FROM settings WHERE key = ?", (key,))
 
 
 # ---------- alarms ----------

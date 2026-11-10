@@ -1,10 +1,11 @@
 import { Toast } from '@base-ui/react/toast'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
-import type { Alarm, Artist, Device, LoopStatus, NewAlarm, NowPlaying, Releases, SleepStatus } from './api'
+import type { Alarm, Artist, Device, LoopStatus, NewAlarm, NowPlaying, PartyHostState, Releases, SleepStatus } from './api'
 import { Alarms } from './components/Alarms'
 import { NewReleases } from './components/NewReleases'
 import { NowPlayingBar } from './components/NowPlayingBar'
+import { Party } from './components/Party'
 import { SearchPanel } from './components/SearchPanel'
 import { Toasts } from './components/Toasts'
 import { TopArtists } from './components/TopArtists'
@@ -22,6 +23,7 @@ export default function App() {
   const [loop, setLoop] = useState<LoopStatus | null>(null)
   const [releases, setReleases] = useState<Releases | null>(null)
   const [releasesLoading, setReleasesLoading] = useState(true) // first load starts on mount
+  const [party, setParty] = useState<PartyHostState | null>(null)
   const [backendError, setBackendError] = useState<string | null>(null)
 
   const showError = useCallback(
@@ -31,11 +33,12 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      // sleep + loop status are local to the backend (no Spotify quota), only now-playing hits Spotify
-      const [np, sl, lp] = await Promise.all([api.nowPlaying(), api.sleep(), api.loop()])
+      // sleep, loop and party are local to the backend (no Spotify quota); only now-playing hits Spotify
+      const [np, sl, lp, pt] = await Promise.all([api.nowPlaying(), api.sleep(), api.loop(), api.party()])
       setNowPlaying(np)
       setSleep(sl)
       setLoop(lp)
+      setParty(pt)
       setBackendError(null)
     } catch (e) {
       setBackendError((e as Error).message)
@@ -133,6 +136,15 @@ export default function App() {
           onPlay={(body, label) => act(() => api.play(body), `Playing ${label}`)}
           onQueue={(uri, label) => act(() => api.queue([uri]), `Queued ${label}`)}
           onError={showError}
+        />
+
+        <Party
+          state={party}
+          onStart={() => act(async () => setParty(await api.startParty()), 'Party started 🎉')}
+          onEnd={() => act(async () => setParty(await api.endParty()), 'Party ended')}
+          onSetHost={(host) => act(async () => setParty(await api.setPartyHost(host)), `Guests will use ${host}`)}
+          onRemove={(id, name) => act(async () => (await api.removePartySong(id), setParty(await api.party())), `Removed ${name}`)}
+          onCopied={() => toast.add({ title: 'Guest link copied', timeout: 2000 })}
         />
 
         <Alarms

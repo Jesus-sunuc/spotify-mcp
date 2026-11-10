@@ -8,11 +8,12 @@ import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from spotipy.exceptions import SpotifyException
 
 import db
+import party
 import player
 import releases
 import server  # same Spotify login / token cache as the MCP server
@@ -23,8 +24,10 @@ import tasks
 async def lifespan(_: FastAPI):
     db.init()
     alarms = asyncio.create_task(tasks.alarm_loop())
+    party_queue = asyncio.create_task(tasks.party_loop())
     yield
     alarms.cancel()
+    party_queue.cancel()
     tasks.sleep_timer.cancel()
     tasks.ab_loop.cancel()
 
@@ -38,6 +41,11 @@ app = FastAPI(title="spotify-mcp web API", lifespan=lifespan)
 async def spotify_error(_: Request, e: SpotifyException):
     status = e.http_status if 400 <= (e.http_status or 0) < 600 else 502
     return JSONResponse({"error": e.msg}, status_code=status)
+
+
+@app.exception_handler(party.PartyError)
+async def party_error(_: Request, e: party.PartyError):
+    return JSONResponse({"error": str(e)}, status_code=e.status)
 
 
 @app.exception_handler(RuntimeError)
@@ -210,6 +218,59 @@ async def loop_stop():
 def new_releases(refresh: bool = False):
     """Albums/singles from your top artists released in the last 90 days. Cached for 6 hours."""
     return releases.get(refresh=refresh)
+
+
+# ---------- party jukebox (host side; guests use guest_api.py) ----------
+
+@app.get("/api/party")
+def party_state():
+    code = party.active_code()
+    return {
+        "active": bool(code),
+        "url": party.guest_url(),
+        "host": party.host_address(),
+        "port": party.GUEST_PORT,
+        "songs": party.songs(code) if code else [],
+    }
+
+
+@app.post("/api/party")
+def party_start():
+    party.start()
+    return party_state()
+
+
+@app.delete("/api/party")
+def party_end():
+    party.end()
+    return party_state()
+
+
+class PartyHostBody(BaseModel):
+    host: str = Field(min_length=1, max_length=253, pattern=r"^[A-Za-z0-9.\-]+$")
+
+
+@app.put("/api/party/host")
+def party_host(body: PartyHostBody):
+    party.set_host_address(body.host)
+    return party_state()
+
+
+@app.delete("/api/party/songs/{song_id}", status_code=204)
+def party_remove_song(song_id: int):
+    if not party.set_status(song_id, "removed"):
+        raise HTTPException(404, "Song not found")
+
+
+@app.get("/api/party/qr.svg")
+def party_qr():
+    import segno  # only needed here
+
+    url = party.guest_url()
+    if not url:
+        raise HTTPException(404, "Start a party and set your Mac's address first")
+    svg = segno.make(url, error="m").svg_inline(scale=8, border=2, dark="#000", light="#fff")
+    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
 # ---------- alarms ----------
