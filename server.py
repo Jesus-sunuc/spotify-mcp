@@ -166,6 +166,30 @@ def play(track_uris: list[str] | None = None, playlist_id: str | None = None) ->
     return {"playing": True}
 
 
+@mcp.tool()
+def play_artist(artist_name: str) -> dict:
+    """Play an artist's catalog, most popular songs first (Premium). Use for requests like 'play <artist>'.
+    Replaces what's playing."""
+    res = sp().search(q=f"artist:{artist_name}", type="artist", limit=5)
+    artists = [a for a in res["artists"]["items"] if a]
+    if not artists:
+        raise RuntimeError(f"No artist found for '{artist_name}'.")
+    # Prefer an exact (case-insensitive) name match over Spotify's first result
+    artist = next((a for a in artists if a["name"].lower() == artist_name.lower()), artists[0])
+    sp().start_playback(device_id=_device_id(), context_uri=artist["uri"])
+    return {"playing": True, "artist": artist["name"]}
+
+
+@mcp.tool()
+def pause() -> dict:
+    """Pause playback on the active device (Premium). Resume with play() and no arguments."""
+    cur = sp().current_playback()
+    if not cur or not cur.get("is_playing"):
+        return {"paused": True, "note": "Nothing was playing."}
+    sp().pause_playback(device_id=cur["device"]["id"])
+    return {"paused": True}
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "auth":
         am = _auth_manager(open_browser=True)
