@@ -1,0 +1,57 @@
+# Pinned so the project name doesn't change with the folder name.
+name: spotify-mcp
+
+# Ports 5175/8001 on the host so this can run next to dona-pilar (5173/8000).
+# The Claude Code MCP server (backend/server.py over stdio) still runs on the host.
+
+services:
+  spotify-mcp-api:
+    container_name: spotify_mcp_api
+    build:
+      context: .
+    user: developer
+    volumes:
+      # Repo mounted for hot reload. backend/.env and backend/.spotify_token_cache come along,
+      # so the container uses the same Spotify login (run `server.py auth` on the host).
+      - ../:/app/
+      - developer_home:/home/developer
+    working_dir: /app/backend
+    environment:
+      - TZ=America/Guatemala
+      # Linux venv lives in the home volume; backend/.venv is the macOS one and isn't used here.
+      - VIRTUAL_ENV=/home/developer/.venv
+      - PATH=/home/developer/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    command: >
+      sh -c "
+        uv venv --allow-existing --quiet /home/developer/.venv
+        uv pip install --quiet -r requirements.txt
+        uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+      "
+    ports:
+      - 127.0.0.1:8001:8000  # localhost only: the API controls your Spotify and has no auth
+
+  spotify-mcp-web:
+    container_name: spotify_mcp_web
+    build:
+      context: .
+    user: developer
+    volumes:
+      - ../:/app/
+      # Keep Linux node_modules in a volume so they don't overwrite the macOS ones in frontend/
+      - web_node_modules:/app/frontend/node_modules
+    working_dir: /app/frontend
+    environment:
+      - API_URL=http://spotify-mcp-api:8000
+    command: >
+      sh -c "
+        npm ci --no-audit --no-fund   # ci never rewrites package-lock.json
+        npm run dev -- --host 0.0.0.0 --port 5173
+      "
+    ports:
+      - 127.0.0.1:5175:5173
+    depends_on:
+      - spotify-mcp-api
+
+volumes:
+  developer_home:
+  web_node_modules:

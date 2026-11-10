@@ -26,6 +26,23 @@ Requires Spotify Premium (playback control) and a Spotify developer app.
 
 ## Run the web remote
 
+### With Docker Compose (recommended)
+
+Do the one-time backend login on the host first (step 2 above); the containers reuse `backend/.env` and the cached token.
+
+```sh
+cd .devcontainer && docker compose up        # add -d to run in the background
+```
+
+| Service | URL |
+|---|---|
+| Web remote | http://localhost:5175 |
+| API | http://localhost:8001 (docs at `/docs`) |
+
+Both are bound to `127.0.0.1` only. Ports differ from dona-pilar (5173/8000) so both stacks can run at once. Stop with `docker compose down`.
+
+### Without Docker
+
 Two terminals:
 
 ```sh
