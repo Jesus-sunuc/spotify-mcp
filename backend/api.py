@@ -14,6 +14,7 @@ from spotipy.exceptions import SpotifyException
 
 import db
 import player
+import releases
 import server  # same Spotify login / token cache as the MCP server
 import tasks
 
@@ -25,6 +26,7 @@ async def lifespan(_: FastAPI):
     yield
     alarms.cancel()
     tasks.sleep_timer.cancel()
+    tasks.ab_loop.cancel()
 
 
 app = FastAPI(title="spotify-mcp web API", lifespan=lifespan)
@@ -178,6 +180,36 @@ async def sleep_start(body: SleepBody):  # async: the timer task must live on th
 @app.delete("/api/sleep")
 async def sleep_cancel():
     return tasks.sleep_timer.cancel()
+
+
+# ---------- A-B loop ----------
+
+class LoopBody(BaseModel):
+    a_ms: int = Field(ge=0)
+    b_ms: int = Field(gt=0)
+
+
+@app.get("/api/loop")
+def loop_status():
+    return tasks.ab_loop.status()
+
+
+@app.post("/api/loop")
+async def loop_start(body: LoopBody):  # async: the loop task must live on the server's event loop
+    return await tasks.ab_loop.start(body.a_ms, body.b_ms)
+
+
+@app.delete("/api/loop")
+async def loop_stop():
+    return tasks.ab_loop.cancel()
+
+
+# ---------- new releases ----------
+
+@app.get("/api/releases")
+def new_releases(refresh: bool = False):
+    """Albums/singles from your top artists released in the last 90 days. Cached for 6 hours."""
+    return releases.get(refresh=refresh)
 
 
 # ---------- alarms ----------

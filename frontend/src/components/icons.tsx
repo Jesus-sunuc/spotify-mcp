@@ -73,6 +73,22 @@ export const ChevronIcon = ({ className = 'size-4' }: Props) => (
   </svg>
 )
 
+export const LoopIcon = ({ className = 'size-5' }: Props) => (
+  <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true" className={className}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </svg>
+)
+
+export const RefreshIcon = ({ className = 'size-4' }: Props) => (
+  <svg viewBox="0 0 24 24" {...stroke} aria-hidden="true" className={className}>
+    <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+    <path d="M21 3v5h-5" />
+  </svg>
+)
+
 export const MusicIcon =({ className = 'size-5' }: Props) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className={className}>
     <path d="M9 18V5l12-2v13" />

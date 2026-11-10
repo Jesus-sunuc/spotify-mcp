@@ -44,6 +44,28 @@ export type Alarm = {
 
 export type NewAlarm = Omit<Alarm, 'id' | 'enabled' | 'last_fired'>
 
+export type LoopStatus = {
+  active: boolean
+  a_ms: number | null
+  b_ms: number | null
+  track_uri: string | null
+  stopped_reason: string | null
+}
+
+export type Release = {
+  uri: string
+  id: string
+  name: string
+  artists: string
+  type: 'album' | 'single' | 'compilation'
+  total_tracks: number | null
+  release_date: string // YYYY-MM-DD
+  image: string | null
+  because: string // which of your top artists it came from
+}
+
+export type Releases = { items: Release[]; updated_at: number; days_back: number }
+
 export type SearchResults = { track: Track; artist: Artist; playlist: Playlist }
 export type SearchType = keyof SearchResults
 
@@ -85,4 +107,10 @@ export const api = {
     request<Alarm>(`/alarms/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
   deleteAlarm: (id: number) => request(`/alarms/${id}`, { method: 'DELETE' }),
   testAlarm: (id: number) => post(`/alarms/${id}/test`),
+
+  loop: () => request<LoopStatus>('/loop'),
+  startLoop: (a_ms: number, b_ms: number) => post<LoopStatus>('/loop', { a_ms, b_ms }),
+  stopLoop: () => request<LoopStatus>('/loop', { method: 'DELETE' }),
+
+  releases: (refresh = false) => request<Releases>(`/releases${refresh ? '?refresh=true' : ''}`),
 }

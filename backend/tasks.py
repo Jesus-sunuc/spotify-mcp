@@ -68,6 +68,90 @@ class SleepTimer:
 sleep_timer = SleepTimer()
 
 
+# ---------- A-B loop ----------
+
+class ABLoop:
+    """Repeat the section [a_ms, b_ms) of the current track by seeking back to A when playback reaches B.
+
+    Seeks go through Spotify's servers, so expect roughly ±0.5-1s precision (more on smart speakers).
+    """
+
+    SEEK_EARLY_S = 0.25  # seek slightly before B to make up for network latency
+    RESYNC_S = 5  # re-read the real position this long before B so drift doesn't build up
+
+    def __init__(self) -> None:
+        self._task: asyncio.Task | None = None
+        self.a_ms = self.b_ms = 0
+        self.track: dict | None = None
+        self.stopped_reason: str | None = None
+
+    def status(self) -> dict:
+        active = self._task is not None and not self._task.done()
+        return {
+            "active": active,
+            "a_ms": self.a_ms if active else None,
+            "b_ms": self.b_ms if active else None,
+            "track_uri": self.track["uri"] if active and self.track else None,
+            "stopped_reason": None if active else self.stopped_reason,
+        }
+
+    async def start(self, a_ms: int, b_ms: int) -> dict:
+        cur = await asyncio.to_thread(server.sp().current_playback)
+        if not cur or not cur.get("item"):
+            raise RuntimeError("Nothing is playing. Start a song first.")
+        duration = cur["item"]["duration_ms"]
+        if not (0 <= a_ms < b_ms <= duration):
+            raise RuntimeError("A must be before B, and both inside the song.")
+        if b_ms - a_ms < 2000:
+            raise RuntimeError("Make the loop at least 2 seconds long.")
+        self.cancel()
+        self.a_ms, self.b_ms, self.stopped_reason = a_ms, b_ms, None
+        self.track = {"uri": cur["item"]["uri"], "device_id": cur["device"]["id"]}
+        await asyncio.to_thread(server.sp().seek_track, a_ms, device_id=self.track["device_id"])
+        self._task = asyncio.create_task(self._run())
+        return self.status()
+
+    def cancel(self, reason: str = "stopped") -> dict:
+        if self._task and not self._task.done():
+            self._task.cancel()
+            self.stopped_reason = reason
+        self._task = None
+        return self.status()
+
+    async def _seek_a(self) -> None:
+        await asyncio.to_thread(server.sp().seek_track, self.a_ms, device_id=self.track["device_id"])
+        await asyncio.sleep(1)  # let the device report the new position before reading it again
+
+    async def _run(self) -> None:
+        try:
+            while True:
+                cur = await asyncio.to_thread(server.sp().current_playback)
+                if not cur or not cur.get("item") or cur["item"]["uri"] != self.track["uri"]:
+                    self.stopped_reason = "the song changed"
+                    return
+                if not cur.get("is_playing"):
+                    self.stopped_reason = "playback was paused"
+                    return
+                pos = cur["progress_ms"]
+                if pos >= self.b_ms or pos < self.a_ms - 2000:  # past B, or someone seeked before A
+                    await self._seek_a()
+                    continue
+                wait = (self.b_ms - pos) / 1000
+                if wait > self.RESYNC_S + 1:
+                    await asyncio.sleep(wait - self.RESYNC_S)  # sleep most of the way, then re-sync
+                    continue
+                await asyncio.sleep(max(0, wait - self.SEEK_EARLY_S))
+                await self._seek_a()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.exception("A-B loop failed")
+            self.stopped_reason = f"error: {e}"
+
+
+ab_loop = ABLoop()
+
+
 # ---------- wake-up alarms ----------
 
 ALARM_CHECK_SECONDS = 20

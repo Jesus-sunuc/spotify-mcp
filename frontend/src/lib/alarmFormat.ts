@@ -11,6 +11,18 @@ export function describeDays(days: number[]) {
   return days.map((d) => DAYS[d]).join(', ')
 }
 
+/** 83456 -> '1:23.4' */
+export function formatMs(ms: number) {
+  const s = ms / 1000
+  return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
+}
+
+/** '2026-09-25' -> 'Sep 25' (local date, no timezone shift) */
+export function formatDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 /** '06:30' -> '6:30 AM' */
 export function formatTime(hhmm: string) {
   const [h, m] = hhmm.split(':').map(Number)

@@ -1,8 +1,9 @@
 import { Toast } from '@base-ui/react/toast'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
-import type { Alarm, Artist, Device, NewAlarm, NowPlaying, SleepStatus } from './api'
+import type { Alarm, Artist, Device, LoopStatus, NewAlarm, NowPlaying, Releases, SleepStatus } from './api'
 import { Alarms } from './components/Alarms'
+import { NewReleases } from './components/NewReleases'
 import { NowPlayingBar } from './components/NowPlayingBar'
 import { SearchPanel } from './components/SearchPanel'
 import { Toasts } from './components/Toasts'
@@ -18,6 +19,9 @@ export default function App() {
   const [devices, setDevices] = useState<Device[]>([])
   const [topArtists, setTopArtists] = useState<Artist[] | null>(null)
   const [alarms, setAlarms] = useState<Alarm[] | null>(null)
+  const [loop, setLoop] = useState<LoopStatus | null>(null)
+  const [releases, setReleases] = useState<Releases | null>(null)
+  const [releasesLoading, setReleasesLoading] = useState(true) // first load starts on mount
   const [backendError, setBackendError] = useState<string | null>(null)
 
   const showError = useCallback(
@@ -27,9 +31,11 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [np, sl] = await Promise.all([api.nowPlaying(), api.sleep()])
+      // sleep + loop status are local to the backend (no Spotify quota), only now-playing hits Spotify
+      const [np, sl, lp] = await Promise.all([api.nowPlaying(), api.sleep(), api.loop()])
       setNowPlaying(np)
       setSleep(sl)
+      setLoop(lp)
       setBackendError(null)
     } catch (e) {
       setBackendError((e as Error).message)
@@ -44,6 +50,30 @@ export default function App() {
     api.alarms().then(setAlarms).catch((e: Error) => showError(e.message))
   }, [showError])
 
+  const loadReleases = useCallback(
+    (refresh = false) => {
+      if (refresh) setReleasesLoading(true)
+      api
+        .releases(refresh)
+        .then(setReleases)
+        .catch((e: Error) => showError(e.message))
+        .finally(() => setReleasesLoading(false))
+    },
+    [showError],
+  )
+
+  /** Ask the backend for the live position (the last poll can be up to 5s old). */
+  const getPosition = useCallback(async () => {
+    try {
+      const np = await api.nowPlaying()
+      setNowPlaying(np)
+      return np.progress_ms ?? null
+    } catch (e) {
+      showError((e as Error).message)
+      return null
+    }
+  }, [showError])
+
   // Poll playback + sleep timer so changes made elsewhere (Spotify app, the timer itself) show up here.
   useEffect(() => {
     refresh()
@@ -55,7 +85,8 @@ export default function App() {
     api.topArtists().then(setTopArtists).catch((e: Error) => showError(e.message))
     refreshDevices()
     refreshAlarms()
-  }, [showError, refreshDevices, refreshAlarms])
+    loadReleases()
+  }, [showError, refreshDevices, refreshAlarms, loadReleases])
 
   /** Run an action, toast the result, then refresh the now-playing bar. Returns whether it succeeded. */
   async function act(action: () => Promise<unknown>, success: string) {
@@ -90,6 +121,13 @@ export default function App() {
         )}
 
         <TopArtists artists={topArtists} onPlay={(a) => act(() => api.play({ context_uri: a.uri }), `Playing ${a.name}`)} />
+
+        <NewReleases
+          data={releases}
+          loading={releasesLoading}
+          onRefresh={() => loadReleases(true)}
+          onPlay={(r) => act(() => api.play({ context_uri: r.uri }), `Playing ${r.name}`)}
+        />
 
         <SearchPanel
           onPlay={(body, label) => act(() => api.play(body), `Playing ${label}`)}
@@ -127,6 +165,24 @@ export default function App() {
         sleep={sleep}
         onStartSleep={(m) => act(() => api.startSleep(m), `Sleep timer: ${m} minutes`)}
         onCancelSleep={() => act(api.cancelSleep, 'Sleep timer off')}
+        loop={loop}
+        getPosition={getPosition}
+        onStartLoop={async (a, b) => {
+          try {
+            setLoop(await api.startLoop(a, b))
+            toast.add({ title: 'Looping A-B', timeout: 2000 })
+          } catch (e) {
+            showError((e as Error).message)
+          }
+        }}
+        onStopLoop={async () => {
+          try {
+            setLoop(await api.stopLoop())
+            toast.add({ title: 'Loop stopped', timeout: 2000 })
+          } catch (e) {
+            showError((e as Error).message)
+          }
+        }}
       />
       <Toasts />
     </div>
