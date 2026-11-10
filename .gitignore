@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Spotify OAuth token (personal login, never commit)
+.spotify_token_cache
